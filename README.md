@@ -2373,3 +2373,145 @@ Finished: SUCCESS
 
 </details>
 
+## Pushing Image to DockerHub
+
+At this point, I have achieved the following;
+
+* **Checkedout Git Repo**
+* **Run Tests**
+* **Build Jar File**
+* **Build Image**
+
+Next step will be the configuration of the Java maven build to push the image to my DockerHub private repository which is easy to set-up and allows us to have one free private repository. So I'll delete the repo occupying my free space and create a new empty one which will be used by Jenkins.
+
+* **Push to private Repo**
+
+![image-8](./images/image-8.png)
+
+![image-8a](./images/image-8a.png)
+
+I've also added my DockerHub credentials in Jenkins and configured it to authorize Jenkins access to my DockerHub repos. I wont specify the repo hostname like in Nexus, just the env variables of my credentials which are bound by Jenkins and supplied by secret texts. If my build fails, then I'll know I have chosen the wrong credential, presumably that of GitHub as I use the same usernames but with different passwords.
+
+![image-9](./images/image-9.png)
+
+My first build failed due to authorization issue stemming from GitHub credentials, so I swapped with the DockerHub ones and the build was successful. I will run another build to check the idempotent nature of Jenkins builds in DockerHub and there was no additional image created which is cool.
+
+![image-10](./images/image-10.png)
+
+The image was successfully pushed in DockerHub and I will use it later on to automate the deployment of the build in an AWS EC2 instance.
+
+![image-11](./images/image-11.png)
+
+
+<details>
+
+  <summary>Click to expand and view logs</summary>
+  
+  ### Console Output
+
+```shell
+Started by user Joseph Mwania
+Running as SYSTEM
+Building in workspace /var/jenkins_home/workspace/java-maven-build
+The recommended git tool is: NONE
+using credential githad-credentials
+ > git rev-parse --resolve-git-dir /var/jenkins_home/workspace/java-maven-build/.git # timeout=10
+Fetching changes from the remote Git repository
+ > git config remote.origin.url https://github.com/appwebtech/java-maven-app.git # timeout=10
+Fetching upstream changes from https://github.com/appwebtech/java-maven-app.git
+ > git --version # timeout=10
+ > git --version # 'git version 2.30.2'
+using GIT_ASKPASS to set credentials 
+ > git fetch --tags --force --progress -- https://github.com/appwebtech/java-maven-app.git +refs/heads/*:refs/remotes/origin/* # timeout=10
+ > git rev-parse refs/remotes/origin/jenkins-jobs^{commit} # timeout=10
+Checking out Revision f81d76b5c42ed7ec2202cec75dd314ec53cff92c (refs/remotes/origin/jenkins-jobs)
+ > git config core.sparsecheckout # timeout=10
+ > git checkout -f f81d76b5c42ed7ec2202cec75dd314ec53cff92c # timeout=10
+Commit message: "Update Dockerfile"
+ > git rev-list --no-walk f81d76b5c42ed7ec2202cec75dd314ec53cff92c # timeout=10
+[java-maven-build] $ /var/jenkins_home/tools/hudson.tasks.Maven_MavenInstallation/maven-3.8/bin/mvn package
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ---------------------< com.example:java-maven-app >---------------------
+[INFO] Building java-maven-app 1.1.0-SNAPSHOT
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- maven-resources-plugin:2.6:resources (default-resources) @ java-maven-app ---
+[WARNING] Using platform encoding (UTF-8 actually) to copy filtered resources, i.e. build is platform dependent!
+[INFO] Copying 1 resource
+[INFO] 
+[INFO] --- maven-compiler-plugin:3.6.0:compile (default-compile) @ java-maven-app ---
+[INFO] Nothing to compile - all classes are up to date
+[INFO] 
+[INFO] --- maven-resources-plugin:2.6:testResources (default-testResources) @ java-maven-app ---
+[WARNING] Using platform encoding (UTF-8 actually) to copy filtered resources, i.e. build is platform dependent!
+[INFO] skip non existing resourceDirectory /var/jenkins_home/workspace/java-maven-build/src/test/resources
+[INFO] 
+[INFO] --- maven-compiler-plugin:3.6.0:testCompile (default-testCompile) @ java-maven-app ---
+[INFO] Nothing to compile - all classes are up to date
+[INFO] 
+[INFO] --- maven-surefire-plugin:2.12.4:test (default-test) @ java-maven-app ---
+[INFO] Surefire report directory: /var/jenkins_home/workspace/java-maven-build/target/surefire-reports
+
+-------------------------------------------------------
+ T E S T S
+-------------------------------------------------------
+Running AppTest
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.137 sec
+
+Results :
+
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+
+[INFO] 
+[INFO] --- maven-jar-plugin:2.4:jar (default-jar) @ java-maven-app ---
+[INFO] 
+[INFO] --- spring-boot-maven-plugin:2.3.5.RELEASE:repackage (default) @ java-maven-app ---
+[INFO] Replacing main artifact with repackaged archive
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  3.077 s
+[INFO] Finished at: 2021-12-14T16:34:42Z
+[INFO] ------------------------------------------------------------------------
+[java-maven-build] $ /bin/sh -xe /tmp/jenkins16656987205168933822.sh
++ docker build -t appwebtech/java-maven-docker:jma-1.0 .
+Sending build context to Docker daemon  17.36MB
+
+Step 1/5 : FROM openjdk:8-jre-alpine
+ ---> f7a292bbb70c
+Step 2/5 : EXPOSE 8080
+ ---> Using cache
+ ---> ba63e3dab886
+Step 3/5 : COPY ./target/java-maven-app-1.1.0-SNAPSHOT.jar.original /usr/app/
+ ---> Using cache
+ ---> a9a8ead29ae8
+Step 4/5 : WORKDIR /usr/app
+ ---> Using cache
+ ---> 1d6989ca21b9
+Step 5/5 : ENTRYPOINT ["java", "-jar", "java-maven-app-1.1.0-SNAPSHOT.jar.original"]
+ ---> Using cache
+ ---> a51213047d46
+Successfully built a51213047d46
+Successfully tagged appwebtech/java-maven-docker:jma-1.0
++ docker login -u appwebtech -p ****
+WARNING! Using --password via the CLI is insecure. Use --password-stdin.
+WARNING! Your password will be stored unencrypted in /var/jenkins_home/.docker/config.json.
+Configure a credential helper to remove this warning. See
+https://docs.docker.com/engine/reference/commandline/login/#credentials-store
+
+Login Succeeded
++ docker push appwebtech/java-maven-docker:jma-1.0
+The push refers to repository [docker.io/appwebtech/java-maven-docker]
+5a9df1124f47: Preparing
+edd61588d126: Preparing
+9b9b7f3d56a0: Preparing
+f1b5933fe4b5: Preparing
+9b9b7f3d56a0: Mounted from library/openjdk
+edd61588d126: Mounted from library/openjdk
+f1b5933fe4b5: Mounted from library/openjdk
+5a9df1124f47: Pushed
+jma-1.0: digest: sha256:85b61484dc99b1a6e17497f4f540b21a850f2689bf1797b1b25a33abb9a23491 size: 1155
+Finished: SUCCESS
+```
+

@@ -6,7 +6,7 @@ I will create a server in DigitalOcean and install Jenkins in a Docker container
 
 ![image-1](./images/image-1.png)
 
-I have installed Maven via the Jenkins plugins and executed the build which was successful with all the binaries its dependencies. I will need Nodejs and npm package managers installed inside the Jenkins container but I will run the installations directly inside the Jenkins container.
+I have installed Maven via the Jenkins plugins and executed the build which was successful with all the binaries and dependencies. I will need Nodejs and npm package managers installed inside the Jenkins container but I will run the installations directly inside the Jenkins container.
 
 ![image-2](./images/image-2.png)
 
@@ -2213,5 +2213,163 @@ Finished: SUCCESS
 
 </details>
 
+
 ## Preparing Docker Image
+
+I will be building my docker image inside a Jenkins container, therefore I will need to have the docker commands available inside the container. I will attach a volume to Jenkins from the host file. Inside the server where Jenkins is running on DigitalOcean server (droplet), I have access to docker commands but I want to have access inside the Jenkins container. I'll SSH in the droplet to demo what I mean.
+
+As shown below, I have Jenkins available and running inside the droplet but I want to be able to run it inside the Jenkins container. To get that sorted, I'll mount docker runtime directory from the droplet into the container as a volume.
+
+![image-3](./images/image-3.png)
+
+The data we have in the droplet will be persisted in the new container making my configurations immutable.
+
+```shell
+docker run -p 8080:8080 -p 50000:50000 -d \
+-v jenkins_home:/var/jenkins_home \ # Already exists, won't be recreated
+-v /var/run/docker.sock:/var/run/docker.sock \ # Will be available on the host (droplet)
+-v $(which docker):/usr/bin/docker jenkins/jenkins:lts # Will be mounted on the docker runtime of the container
+```
+
+Next I'll create permissions for the Jenkins user to enable write and executable access on *docker.sock* file inside the container to enable Jenkins to run docker subsequent to which I'll now build the docker image by using the Dockerfile in my git repository.
+
+The java-maven-app Snapshot was build when I executed the Maven build in Jenkins, so I'll use it to create the Dockerfile.
+
+```Dockerfile
+FROM openjdk:8-jre-alpine
+
+EXPOSE 8080
+
+COPY ./target/java-maven-app-1.1.0-SNAPSHOT.jar.original /usr/app/
+WORKDIR /usr/app
+
+ENTRYPOINT ["java", "-jar", "java-maven-app-1.1.0-SNAPSHOT.jar.original"]
+```
+
+![image-4](./images/image-4.png)
+
+I'll add docker build command in the Jenkins build, apply and run the build.
+
+![image-5](./images/image-5.png)
+
+Maven package was successfully executed, docker image file (**java-maven-app**) was successfully built  and it should be available inside the docker container.
+
+![image-6](./images/image-6.png)
+
+![image-7](./images/image-7.png)
+
+
+<details>
+
+  <summary>Click to expand and view logs</summary>
+  
+  ### Console Output
+
+```shell
+Started by user Joseph Mwania
+Running as SYSTEM
+Building in workspace /var/jenkins_home/workspace/java-maven-build
+The recommended git tool is: NONE
+using credential githad-credentials
+ > git rev-parse --resolve-git-dir /var/jenkins_home/workspace/java-maven-build/.git # timeout=10
+Fetching changes from the remote Git repository
+ > git config remote.origin.url https://github.com/appwebtech/java-maven-app.git # timeout=10
+Fetching upstream changes from https://github.com/appwebtech/java-maven-app.git
+ > git --version # timeout=10
+ > git --version # 'git version 2.30.2'
+using GIT_ASKPASS to set credentials 
+ > git fetch --tags --force --progress -- https://github.com/appwebtech/java-maven-app.git +refs/heads/*:refs/remotes/origin/* # timeout=10
+ > git rev-parse refs/remotes/origin/jenkins-jobs^{commit} # timeout=10
+Checking out Revision f81d76b5c42ed7ec2202cec75dd314ec53cff92c (refs/remotes/origin/jenkins-jobs)
+ > git config core.sparsecheckout # timeout=10
+ > git checkout -f f81d76b5c42ed7ec2202cec75dd314ec53cff92c # timeout=10
+Commit message: "Update Dockerfile"
+ > git rev-list --no-walk 863b3598676d8c08142b741634c6c47917aa3c63 # timeout=10
+[java-maven-build] $ /var/jenkins_home/tools/hudson.tasks.Maven_MavenInstallation/maven-3.8/bin/mvn package
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ---------------------< com.example:java-maven-app >---------------------
+[INFO] Building java-maven-app 1.1.0-SNAPSHOT
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- maven-resources-plugin:2.6:resources (default-resources) @ java-maven-app ---
+[WARNING] Using platform encoding (UTF-8 actually) to copy filtered resources, i.e. build is platform dependent!
+[INFO] Copying 1 resource
+[INFO] 
+[INFO] --- maven-compiler-plugin:3.6.0:compile (default-compile) @ java-maven-app ---
+[INFO] Nothing to compile - all classes are up to date
+[INFO] 
+[INFO] --- maven-resources-plugin:2.6:testResources (default-testResources) @ java-maven-app ---
+[WARNING] Using platform encoding (UTF-8 actually) to copy filtered resources, i.e. build is platform dependent!
+[INFO] skip non existing resourceDirectory /var/jenkins_home/workspace/java-maven-build/src/test/resources
+[INFO] 
+[INFO] --- maven-compiler-plugin:3.6.0:testCompile (default-testCompile) @ java-maven-app ---
+[INFO] Nothing to compile - all classes are up to date
+[INFO] 
+[INFO] --- maven-surefire-plugin:2.12.4:test (default-test) @ java-maven-app ---
+[INFO] Surefire report directory: /var/jenkins_home/workspace/java-maven-build/target/surefire-reports
+
+-------------------------------------------------------
+ T E S T S
+-------------------------------------------------------
+Running AppTest
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.173 sec
+
+Results :
+
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+
+[INFO] 
+[INFO] --- maven-jar-plugin:2.4:jar (default-jar) @ java-maven-app ---
+[INFO] 
+[INFO] --- spring-boot-maven-plugin:2.3.5.RELEASE:repackage (default) @ java-maven-app ---
+[INFO] Replacing main artifact with repackaged archive
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  3.157 s
+[INFO] Finished at: 2021-12-14T14:31:29Z
+[INFO] ------------------------------------------------------------------------
+[java-maven-build] $ /bin/sh -xe /tmp/jenkins12101114745190383103.sh
++ docker build -t java-maven-app:1.0 .
+Sending build context to Docker daemon  17.36MB
+
+Step 1/5 : FROM openjdk:8-jre-alpine
+8-jre-alpine: Pulling from library/openjdk
+e7c96db7181b: Pulling fs layer
+f910a506b6cb: Pulling fs layer
+b6abafe80f63: Pulling fs layer
+f910a506b6cb: Verifying Checksum
+f910a506b6cb: Download complete
+e7c96db7181b: Verifying Checksum
+e7c96db7181b: Download complete
+e7c96db7181b: Pull complete
+f910a506b6cb: Pull complete
+b6abafe80f63: Verifying Checksum
+b6abafe80f63: Download complete
+b6abafe80f63: Pull complete
+Digest: sha256:f362b165b870ef129cbe730f29065ff37399c0aa8bcab3e44b51c302938c9193
+Status: Downloaded newer image for openjdk:8-jre-alpine
+ ---> f7a292bbb70c
+Step 2/5 : EXPOSE 8080
+ ---> Running in b1edd159a62f
+Removing intermediate container b1edd159a62f
+ ---> ba63e3dab886
+Step 3/5 : COPY ./target/java-maven-app-1.1.0-SNAPSHOT.jar.original /usr/app/
+ ---> a9a8ead29ae8
+Step 4/5 : WORKDIR /usr/app
+ ---> Running in 4114eb854261
+Removing intermediate container 4114eb854261
+ ---> 1d6989ca21b9
+Step 5/5 : ENTRYPOINT ["java", "-jar", "java-maven-app-1.1.0-SNAPSHOT.jar.original"]
+ ---> Running in 7f0814ad576b
+Removing intermediate container 7f0814ad576b
+ ---> a51213047d46
+Successfully built a51213047d46
+Successfully tagged java-maven-app:1.0
+Finished: SUCCESS
+
+```
+
+</details>
 

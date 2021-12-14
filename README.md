@@ -2390,7 +2390,7 @@ Next step will be the configuration of the Java maven build to push the image to
 
 ![image-8a](./images/image-8a.png)
 
-I've also added my DockerHub credentials in Jenkins and configured it to authorize Jenkins access to my DockerHub repos. I wont specify the repo hostname like in Nexus, just the env variables of my credentials which are bound by Jenkins and supplied by secret texts. If my build fails, then I'll know I have chosen the wrong credential, presumably that of GitHub as I use the same usernames but with different passwords.
+I've also added my DockerHub credentials in Jenkins and configured it to authorize Jenkins access to my DockerHub repos. I won't specify the repo hostname like in Nexus, just the env variables of my credentials which are bound by Jenkins and supplied by secret texts. If my build fails, then I'll know I have chosen the wrong credential, presumably that of GitHub as I use the same usernames but with different passwords.
 
 ![image-9](./images/image-9.png)
 
@@ -2514,4 +2514,18 @@ f1b5933fe4b5: Mounted from library/openjdk
 jma-1.0: digest: sha256:85b61484dc99b1a6e17497f4f540b21a850f2689bf1797b1b25a33abb9a23491 size: 1155
 Finished: SUCCESS
 ```
+
+A few warnings have been thrown regarding security. The way I provided credentials as  environment variables and had my credentials fetched by Jenkins **secret texts ** may have vulnerabilities.
+
+![image-12](./images/image-12.png)
+
+Using passwords in CLI's is usually frowned at, because password sniffers can easily capture HTTP, FTP,POP3, SMTP etc and in my case I'm using HTTP in Jenkins which many people know that by default it runs on port 8080.
+
+To mitigate that, I'll pipe the password env variable to docker login and the password to standard input from the echo command.
+
+![image-13](./images/image-13.png)
+
+I'll tag the image with a new version (2), test it, build and push it to DOckerHub. Now I'll have two images and the one which is secure is the second version.
+
+![image-14](./images/image-14.png)
 

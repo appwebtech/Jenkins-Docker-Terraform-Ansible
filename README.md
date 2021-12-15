@@ -2780,3 +2780,5 @@ Finished: SUCCESS
 
 </details>
 
+## Run Docker-compose in AWS EC2
+

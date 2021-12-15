@@ -2213,7 +2213,6 @@ Finished: SUCCESS
 
 </details>
 
-
 ## Preparing Docker Image
 
 I will be building my docker image inside a Jenkins container, therefore I will need to have the docker commands available inside the container. I will attach a volume to Jenkins from the host file. Inside the server where Jenkins is running on DigitalOcean server (droplet), I have access to docker commands but I want to have access inside the Jenkins container. I'll SSH in the droplet to demo what I mean.

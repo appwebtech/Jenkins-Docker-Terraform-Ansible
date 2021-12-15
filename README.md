@@ -2780,5 +2780,165 @@ Finished: SUCCESS
 
 </details>
 
-## Run Docker-compose in AWS EC2
+## Preparing Docker-compose Manifest File
 
+The reason as to why I went through the process of automating the deployment of a docker build in a private docker registry is because I wanted to automate the creation of a docker-compose file in an AWS EC2 instance, then use Ansible to automate the copying of the image from DockerHub private registry via a YAML manifest file then after a successful authentication, copy the image to an AWS EC2 instance and then run it.
+
+I have prepared the docker-compose file locally, which is under the *docker-compose-manifest* folder.
+
+What docker-compose will do is fetch Java Maven image from private docker registry (appwebtech/java-maven-docker:java-maven-3.0) and do the various DB configurations whilst mapping the necessary ports.
+
+```yaml
+version: '3'
+services:
+  java-app: 
+    image: appwebtech/java-maven-docker:java-maven-3.0
+    environment:
+      - DB_USER=user
+      - DB_PWD=pass
+      - DB_SERVER=mysql
+      - DB_NAME=my-app-db
+    ports:
+    - 8080:8080
+    container_name: my-java-app
+  mysql:
+    image: mysql
+    ports:
+      - 3306:3306
+    environment:
+      - MYSQL_ROOT_PASSWORD=my-secret-pw
+      - MYSQL_DATABASE=my-app-db
+      - MYSQL_USER=user
+      - MYSQL_PASSWORD=pass
+    volumes:
+    - mysql-data:/var/lib/mysql
+    container_name: mysql
+  phpmyadmin:
+    image: phpmyadmin
+    environment:
+      PMA_HOST: mysql
+    ports: 
+      - 8083:80
+    container_name: myadmin
+volumes:
+  mysql-data:
+    driver: local
+```
+
+The docker-compose YAML file will not run independently but will be fetched via a url by Ansible playbook file as shown below (I'm running Ansible and Terraform separately, but I'll amalgamate Ansible with terraform using **local-config** later on to run the two together).
+
+## Preparing Ansible Manifest File
+
+The Ansible playbook or rather playbooks (has many playbooks in one) will install Docker and Docker-compose in AWS and update Python3 binaries url to my local *usr/bin/python3* path. Other files and dependencies to be used by Ansible like host files, ansible.cfg are running in my local dev environment.
+
+```yaml
+---
+- name: Install Docker, Docker-compose and Python3
+  hosts: all
+  become: yes
+  become_user: root
+  tasks:
+    - name: Ensure Docker and Python3 are installed
+      vars:
+        ansible_python_interpreter: /usr/bin/python
+      yum:
+        name:
+          - docker
+          - python3
+        update_cache: yes
+        state: present
+      register: check_installations
+  #  - debug: msg={{check_installations}}
+    - name: Ensure docker-compose is installed
+      get_url: 
+        url: https://github.com/docker/compose/releases/download/1.27.4/docker-compose-Linux-{{lookup('pipe', 'uname -m')}}
+        dest: /usr/local/bin/docker-compose
+        mode: +x    # Add executable permissions
+      register: check_docker_compose
+   # - debug: msg={{check_docker_compose}}
+  
+- name: Ensure Docker is started
+  hosts: all
+  become: yes
+  tasks: 
+    - name: Ensure Docker daemon is started
+      systemd:
+        name: docker
+        state: started
+      register: check_docker_started
+  #  - debug: msg={{check_docker_started}}
+    - name: Install Docker Python module
+      pip:
+        name: 
+          - docker
+          - docker-compose
+
+- name: Add ec2-user to docker group
+  hosts: all
+  become: yes
+  tasks:
+    - name: Add ec2-ser to docker group
+      user: 
+        name: ec2-user
+        groups: docker
+        append: yes
+    - name: Reconnect to server
+      meta: reset_connection
+
+- name: Start docker containers 
+  hosts: all
+  vars_files:
+    - project-vars
+  tasks:
+    - name: Copy docker compose
+      copy:
+        src: ~/Documents/DevOps/Projects/Jenkins-Ansible-Docker-Terraform/docker-compose-manifests/docker-compose.yaml
+        dest: /home/ec2-user/docker-compose.yaml
+    - name: Docker login
+      docker_login:
+        registry_url: https://index.docker.io/v1/
+        username: appwebtech
+        password: "{{docker_password}}"
+    - name: Start container from Docker-compose
+      docker-compose:
+        project_src: /home/ec2-user
+        state: present
+```
+
+## [Terraform Infra](https://github.com/appwebtech/Terraform-mini-project)
+
+Prior to running Ansible, I will need my infra ready which I will create with Terraform. I will need the bare minimum i.e an EC2 instance, VPC and a Security Group with the necessary ports open and other networking capabilities like interfaces and IPs. I'll initialize Terraform backend and run terraform to create the infrastructure on AWS.
+
+![image-18](./images/image-18.png)
+
+## Blending it All Together
+
+I have my infra ready in AWS, I have my Docker-compose file ready and I have it referenced in my last play of my Ansible playbook manifest. I do need to refactor it and tweak a few places but prior to running Docker-compose on AWS, I'll first run things to see if they will work as I've had issues with Docker-compose when automating it.
+
+A few errors were thrown due to some typos which I fixed and then I connected the Terraform project with the Ansible one via a local-exec and it ran successfully.
+
+![image-19](./images/image-19.png)
+
+docker compose was successfully copied to AWS but it's not running yet.
+
+![image-20](./images/image-20.png)
+
+I will add modules to start docker compose which are in the last play and run the whole process again, possibly without Terraform so I can save the time for the Infra re-creation process.
+
+As I suspected I ran into the same error again which is caused by the first play which installed only docker via pip package manager.
+
+![image-21](./images/image-21.png)
+
+After fixing the code, I ran again the playbook and it installed docker-compose and instantiated the containers.
+
+```yaml
+# *** Code Truncated ***
+    - name: Install Docker Python module
+      pip:
+        name: 
+          - docker
+          - docker-compose
+  # *** Code Truncated ***
+```
+
+![image-22](./images/image-22.png)

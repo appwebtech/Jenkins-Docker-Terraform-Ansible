@@ -2916,6 +2916,8 @@ I have my infra ready in AWS, I have my Docker-compose file ready and I have it 
 
 A few errors were thrown due to some typos which I fixed and then I connected the Terraform project with the Ansible one via a local-exec and it ran successfully.
 
+<img src="https://github.com/appwebtech/Jenkins-Docker-Terraform-Ansible/blob/main/images/image-19-gif.gif"/>
+
 ![image-19](./images/image-19.png)
 
 docker compose was successfully copied to AWS but it's not running yet.

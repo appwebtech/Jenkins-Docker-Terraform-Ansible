@@ -6,7 +6,7 @@ I will create a server in DigitalOcean and install Jenkins in a Docker container
 
 ![image-1](./images/image-1.png)
 
-I have installed Maven via the Jenkins plugins and executed the build which was successful with all the binaries and dependencies. I will need Nodejs and npm package managers installed inside the Jenkins container but I will run the installations directly inside the Jenkins container.
+I have installed Maven via the Jenkins plugins and executed the build which was successful with all the binaries and dependencies. I will need Nodejs and npm package managers installed inside the Jenkins container but I will run the installations directly inside the Jenkins container as they are not natively supported in Jenkins like Maven, Gradle and JDK.
 
 ![image-2](./images/image-2.png)
 
@@ -2394,11 +2394,11 @@ I've also added my DockerHub credentials in Jenkins and configured it to authori
 
 ![image-9](./images/image-9.png)
 
-My first build failed due to authorization issue stemming from GitHub credentials, so I swapped with the DockerHub ones and the build was successful. I will run another build to check the idempotent nature of Jenkins builds in DockerHub and there was no additional image created which is cool.
+My first build failed due to authorization issue stemming from GitHub credentials, so I swapped with the DockerHub ones and the build was successful. I will run another build to check the idempotent nature of Jenkins builds in DockerHub and there was no additional image created which is cool because there was no change in dependencies.
 
 ![image-10](./images/image-10.png)
 
-The image was successfully pushed in DockerHub and I will use it later on to automate the deployment of the build in an AWS EC2 instance.
+The image was successfully pushed in DockerHub and I will use it later on to automate other tasks. Something to note in freestyle jobs like the one I just did is that they are not ideal for Jenkins CI/CD pipeline due to the considerable amount of time taken to configure Jenkins. On the other hand, Groovy scripts are used to run pipeline jobs.
 
 ![image-11](./images/image-11.png)
 
@@ -2515,17 +2515,268 @@ jma-1.0: digest: sha256:85b61484dc99b1a6e17497f4f540b21a850f2689bf1797b1b25a33ab
 Finished: SUCCESS
 ```
 
-A few warnings have been thrown regarding security. The way I provided credentials as  environment variables and had my credentials fetched by Jenkins **secret texts ** may have vulnerabilities.
+A few warnings have been thrown regarding security. The way I provided credentials as  environment variables and had my credentials fetched by Jenkins **Secret texts** may  lead to security issues.
 
 ![image-12](./images/image-12.png)
 
-Using passwords in CLI's is usually frowned at, because password sniffers can easily capture HTTP, FTP,POP3, SMTP etc and in my case I'm using HTTP in Jenkins which many people know that by default it runs on port 8080.
+Using passwords in CLI's is usually frowned at, because password sniffers can easily capture HTTP, FTP,POP3, SMTP etc when data is in transit by a malicious intruder. In my case I'm using HTTP in Jenkins which is insecure and many people especially those who run Jenkins pipelines know that by default it runs on port 8080 which is a concern.
 
 To mitigate that, I'll pipe the password env variable to docker login and the password to standard input from the echo command.
 
 ![image-13](./images/image-13.png)
 
-I'll tag the image with a new version (2), test it, build and push it to DOckerHub. Now I'll have two images and the one which is secure is the second version.
+I'll tag the image with a new version (2), test it, build and push it to DockerHub. I now have two images and the one which is secure is the second version.
 
 ![image-14](./images/image-14.png)
+
+## Building with Jenkins Pipeline
+
+Automating the build process with Jenkins CI/CD pipeline comes in handy as it enables us to have full control of the pipeline (Code Checkout, Test, Build, Deploy) by using scripts for a stable CI/CD. I will create a Pipeline job (my-pipeline) and use a script to automate the deployment of the docker image that we initially build. Jenkins will fetch the script from GitHub and run the Maven build using the script, deploy to my DockerHub private repository. I'll tag the image as version 3.
+
+```groovy
+pipeline {
+    agent any
+    tools {
+        maven 'maven-3.8'
+    }
+    stages {
+        stage("build jar") {
+            steps {
+                script {
+                    echo "building the application..."
+                    sh 'mvn package'
+                }
+            }
+        }
+        stage("build image") {
+            steps {
+                script {
+                    echo "building docker image..."
+                    withCredentials([usernamePassword(credentialsId: 'docker-hub-repo', passwordVariable: 'PASS', usernameVariable: 'USER')]) {
+                        sh 'docker build -t appwebtech/java-maven-docker:java-maven-3.0 .'
+                        sh "echo $PASS | docker login -u $USER --password-stdin"
+                        sh 'docker push appwebtech/java-maven-docker:java-maven-3.0'
+                    }
+                }
+            }
+        }
+        stage("deploy") {
+            steps {
+                script {
+                    echo "deploying the application..."
+                }
+            }
+        }
+    }
+}
+```
+
+The pipeline was executed successfully and the new image was deployed to DockerHub.
+
+![image-15](./images/image-15.png)
+
+Jenkins is able to provide us with logs at every stage of the pipeline in an interactive way instead of accessing the console output.
+
+![image-16](./images/image-16.png)
+
+![image-17](./images/image-17.png)
+
+<details>
+
+  <summary>Click to expand and view logs</summary>
+  
+  ### Console Output
+
+```shell
+Started by user Joseph Mwania
+Obtained Jenkinsfile from git https://github.com/appwebtech/java-maven-app.git
+[Pipeline] Start of Pipeline
+[Pipeline] node
+Running on Jenkins in /var/jenkins_home/workspace/my-pipeline
+[Pipeline] {
+[Pipeline] stage
+[Pipeline] { (Declarative: Checkout SCM)
+[Pipeline] checkout
+Selected Git installation does not exist. Using Default
+The recommended git tool is: NONE
+using credential githad-credentials
+ > git rev-parse --resolve-git-dir /var/jenkins_home/workspace/my-pipeline/.git # timeout=10
+Fetching changes from the remote Git repository
+ > git config remote.origin.url https://github.com/appwebtech/java-maven-app.git # timeout=10
+Fetching upstream changes from https://github.com/appwebtech/java-maven-app.git
+ > git --version # timeout=10
+ > git --version # 'git version 2.30.2'
+using GIT_ASKPASS to set credentials 
+ > git fetch --tags --force --progress -- https://github.com/appwebtech/java-maven-app.git +refs/heads/*:refs/remotes/origin/* # timeout=10
+ > git rev-parse refs/remotes/origin/jenkins-jobs^{commit} # timeout=10
+Checking out Revision 326b1705c9985903911ace73a52ba53cf2df7383 (refs/remotes/origin/jenkins-jobs)
+ > git config core.sparsecheckout # timeout=10
+ > git checkout -f 326b1705c9985903911ace73a52ba53cf2df7383 # timeout=10
+Commit message: "Update Jenkinsfile"
+ > git rev-list --no-walk 326b1705c9985903911ace73a52ba53cf2df7383 # timeout=10
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] withEnv
+[Pipeline] {
+[Pipeline] stage
+[Pipeline] { (Declarative: Tool Install)
+[Pipeline] tool
+[Pipeline] envVarsForTool
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] withEnv
+[Pipeline] {
+[Pipeline] stage
+[Pipeline] { (build jar)
+[Pipeline] tool
+[Pipeline] envVarsForTool
+[Pipeline] withEnv
+[Pipeline] {
+[Pipeline] script
+[Pipeline] {
+[Pipeline] echo
+building the application...
+[Pipeline] sh
++ mvn package
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ---------------------< com.example:java-maven-app >---------------------
+[INFO] Building java-maven-app 1.1.0-SNAPSHOT
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- maven-resources-plugin:2.6:resources (default-resources) @ java-maven-app ---
+[WARNING] Using platform encoding (UTF-8 actually) to copy filtered resources, i.e. build is platform dependent!
+[INFO] Copying 1 resource
+[INFO] 
+[INFO] --- maven-compiler-plugin:3.6.0:compile (default-compile) @ java-maven-app ---
+[INFO] Nothing to compile - all classes are up to date
+[INFO] 
+[INFO] --- maven-resources-plugin:2.6:testResources (default-testResources) @ java-maven-app ---
+[WARNING] Using platform encoding (UTF-8 actually) to copy filtered resources, i.e. build is platform dependent!
+[INFO] skip non existing resourceDirectory /var/jenkins_home/workspace/my-pipeline/src/test/resources
+[INFO] 
+[INFO] --- maven-compiler-plugin:3.6.0:testCompile (default-testCompile) @ java-maven-app ---
+[INFO] Nothing to compile - all classes are up to date
+[INFO] 
+[INFO] --- maven-surefire-plugin:2.12.4:test (default-test) @ java-maven-app ---
+[INFO] Surefire report directory: /var/jenkins_home/workspace/my-pipeline/target/surefire-reports
+
+-------------------------------------------------------
+ T E S T S
+-------------------------------------------------------
+Running AppTest
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.177 sec
+
+Results :
+
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+
+[INFO] 
+[INFO] --- maven-jar-plugin:2.4:jar (default-jar) @ java-maven-app ---
+[INFO] 
+[INFO] --- spring-boot-maven-plugin:2.3.5.RELEASE:repackage (default) @ java-maven-app ---
+[INFO] Replacing main artifact with repackaged archive
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  3.140 s
+[INFO] Finished at: 2021-12-15T09:31:09Z
+[INFO] ------------------------------------------------------------------------
+[Pipeline] }
+[Pipeline] // script
+[Pipeline] }
+[Pipeline] // withEnv
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] stage
+[Pipeline] { (build image)
+[Pipeline] tool
+[Pipeline] envVarsForTool
+[Pipeline] withEnv
+[Pipeline] {
+[Pipeline] script
+[Pipeline] {
+[Pipeline] echo
+building docker image...
+[Pipeline] withCredentials
+Masking supported pattern matches of $PASS
+[Pipeline] {
+[Pipeline] sh
++ docker build -t appwebtech/java-maven-docker:java-maven-3.0 .
+Sending build context to Docker daemon  17.37MB
+
+Step 1/5 : FROM openjdk:8-jre-alpine
+ ---> f7a292bbb70c
+Step 2/5 : EXPOSE 8080
+ ---> Using cache
+ ---> ba63e3dab886
+Step 3/5 : COPY ./target/java-maven-app-1.1.0-SNAPSHOT.jar.original /usr/app/
+ ---> Using cache
+ ---> 6c8b127ea897
+Step 4/5 : WORKDIR /usr/app
+ ---> Using cache
+ ---> 37de8f5a8e18
+Step 5/5 : ENTRYPOINT ["java", "-jar", "java-maven-app-1.1.0-SNAPSHOT.jar.original"]
+ ---> Using cache
+ ---> de6875bc210c
+Successfully built de6875bc210c
+Successfully tagged appwebtech/java-maven-docker:java-maven-3.0
+[Pipeline] sh
+Warning: A secret was passed to "sh" using Groovy String interpolation, which is insecure.
+		 Affected argument(s) used the following variable(s): [PASS]
+		 See https://jenkins.io/redirect/groovy-string-interpolation for details.
++ docker login -u appwebtech --password-stdin
++ echo ****
+WARNING! Your password will be stored unencrypted in /var/jenkins_home/.docker/config.json.
+Configure a credential helper to remove this warning. See
+https://docs.docker.com/engine/reference/commandline/login/#credentials-store
+
+Login Succeeded
+[Pipeline] sh
++ docker push appwebtech/java-maven-docker:java-maven-3.0
+The push refers to repository [docker.io/appwebtech/java-maven-docker]
+574d4ce6922b: Preparing
+edd61588d126: Preparing
+9b9b7f3d56a0: Preparing
+f1b5933fe4b5: Preparing
+9b9b7f3d56a0: Layer already exists
+edd61588d126: Layer already exists
+574d4ce6922b: Layer already exists
+f1b5933fe4b5: Layer already exists
+java-maven-3.0: digest: sha256:1770a96dfd2423fe17637a9a0d4d76ef43c9c331d6b16572ace09e3b190038b2 size: 1155
+[Pipeline] }
+[Pipeline] // withCredentials
+[Pipeline] }
+[Pipeline] // script
+[Pipeline] }
+[Pipeline] // withEnv
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] stage
+[Pipeline] { (deploy)
+[Pipeline] tool
+[Pipeline] envVarsForTool
+[Pipeline] withEnv
+[Pipeline] {
+[Pipeline] script
+[Pipeline] {
+[Pipeline] echo
+deploying the application...
+[Pipeline] }
+[Pipeline] // script
+[Pipeline] }
+[Pipeline] // withEnv
+[Pipeline] }
+[Pipeline] // stage
+[Pipeline] }
+[Pipeline] // withEnv
+[Pipeline] }
+[Pipeline] // withEnv
+[Pipeline] }
+[Pipeline] // node
+[Pipeline] End of Pipeline
+Finished: SUCCESS
+```
+
+</details>
 

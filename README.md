@@ -2512,6 +2512,8 @@ jma-1.0: digest: sha256:85b61484dc99b1a6e17497f4f540b21a850f2689bf1797b1b25a33ab
 Finished: SUCCESS
 ```
 
+</details>
+
 A few warnings have been thrown regarding security. The way I provided credentials as  environment variables and had my credentials fetched by Jenkins **Secret texts** may  lead to security issues.
 
 ![image-12](./images/image-12.png)

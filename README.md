@@ -2368,9 +2368,7 @@ Removing intermediate container 7f0814ad576b
 Successfully built a51213047d46
 Successfully tagged java-maven-app:1.0
 Finished: SUCCESS
-
 ```
-
 </details>
 
 ## Pushing Image to DockerHub

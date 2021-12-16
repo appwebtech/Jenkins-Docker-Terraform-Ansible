@@ -2518,7 +2518,7 @@ A few warnings have been thrown regarding security. The way I provided credentia
 
 ![image-12](./images/image-12.png)
 
-Using passwords in CLI's is usually frowned at, because password sniffers can easily capture HTTP, FTP,POP3, SMTP etc when data is in transit by a malicious intruder. In my case I'm using HTTP in Jenkins which is insecure and many people especially those who run Jenkins pipelines know that by default it runs on port 8080 which is a concern.
+Using passwords in CLI's is usually frowned at, because password sniffers can easily capture HTTP, FTP, POP3, SMTP etc traffic when data is in transit. In my case I'm using HTTP in Jenkins which is insecure and many people especially those who run Jenkins pipelines know that by default it runs on port 8080 which is a concern.
 
 To mitigate that, I'll pipe the password env variable to docker login and the password to standard input from the echo command.
 

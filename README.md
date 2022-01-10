@@ -6,7 +6,7 @@ I will create a server in DigitalOcean and install Jenkins in a Docker container
 
 ![image-1](./images/image-1.png)
 
-I have installed Maven via the Jenkins plugins and executed the build which was successful with all the binaries and dependencies. I will need Nodejs and npm package managers installed inside the Jenkins container but I will run the installations directly inside the Jenkins container as they are not natively supported in Jenkins like Maven, Gradle and JDK.
+I have installed Maven via the Jenkins plugins and executed the build which was successful with all the binaries and dependencies. I will need Nodejs and npm package managers installed inside the Jenkins container but I will run the installations directly inside the Jenkins container as they are not natively supported in Jenkins UI like Maven, Gradle and JDK.
 
 ![image-2](./images/image-2.png)
 
@@ -2215,7 +2215,7 @@ Finished: SUCCESS
 
 ## Preparing Docker Image
 
-I will be building my docker image inside a Jenkins container, therefore I will need to have the docker commands available inside the container. I will attach a volume to Jenkins from the host file. Inside the server where Jenkins is running on DigitalOcean server (droplet), I have access to docker commands but I want to have access inside the Jenkins container. I'll SSH in the droplet to demo what I mean.
+I will be building my docker image inside a Jenkins container, therefore I will need to have the docker commands available inside the container. I will attach a volume to Jenkins from the host file. Inside the server where Jenkins is running on DigitalOcean, I actually do have access to docker commands but I want to have access inside the Jenkins container.I'll SSH in the droplet to demo what I mean.
 
 As shown below, I have Jenkins available and running inside the droplet but I want to be able to run it inside the Jenkins container. To get that sorted, I'll mount docker runtime directory from the droplet into the container as a volume.
 
@@ -2387,18 +2387,17 @@ Next step will be the configuration of the Java maven build to push the image to
 
 ![image-8a](./images/image-8a.png)
 
-I've also added my DockerHub credentials in Jenkins and configured it to authorize Jenkins access to my DockerHub repos. I won't specify the repo hostname like in Nexus, just the env variables of my credentials which are bound by Jenkins and supplied by secret texts. If my build fails, then I'll know I have chosen the wrong credential, presumably that of GitHub as I use the same usernames but with different passwords.
+I've also added my DockerHub credentials in Jenkins and configured it to authorize Jenkins access to my DockerHub repos. I won't specify the repo hostname like in Nexus, just the env variables of my credentials which are bound by Jenkins and supplied by secret texts. If my build fails, then I'll know I chose the wrong credential, presumably that of GitHub as I use the same usernames but with different passwords.
 
 ![image-9](./images/image-9.png)
 
-My first build failed due to authorization issue stemming from GitHub credentials, so I swapped with the DockerHub ones and the build was successful. I will run another build to check the idempotent nature of Jenkins builds in DockerHub and there was no additional image created which is cool because there was no change in dependencies.
+My first build failed due to authorization issue stemming from GitHub credentials, so I swapped with the DockerHub ones and the build was successful. I will run another build to check the idempotent nature of Jenkins builds in DockerHub and there was no additional image created which confirms the idempotency of Jenkins.
 
 ![image-10](./images/image-10.png)
 
-The image was successfully pushed in DockerHub and I will use it later on to automate other tasks. Something to note in freestyle jobs like the one I just did is that they are not ideal for Jenkins CI/CD pipeline due to the considerable amount of time taken to configure Jenkins. On the other hand, Groovy scripts are used to run pipeline jobs.
+The image was successfully pushed in DockerHub and I will use it later on to automate other tasks. Something to note in freestyle jobs like the one I just did is that they are not ideal for Jenkins CI/CD pipeline due to the considerable amount of time taken to configure Jenkins. On the other hand, Groovy scripts are ideal for running pipeline jobs.
 
 ![image-11](./images/image-11.png)
-
 
 <details>
 
@@ -2518,19 +2517,19 @@ A few warnings have been thrown regarding security. The way I provided credentia
 
 ![image-12](./images/image-12.png)
 
-Using passwords in CLI's is usually frowned at, because password sniffers can easily capture HTTP, FTP, POP3, SMTP etc traffic when data is in transit. In my case I'm using HTTP in Jenkins which is insecure and many people especially those who run Jenkins pipelines know that by default it runs on port 8080 which is a concern.
+Using passwords in CLI's is usually frowned at, because password sniffers can easily capture HTTP, FTP, POP3, SMTP etc traffic when data is in transit. In my case I'm using HTTP in Jenkins which is insecure and many people especially those who run Jenkins pipelines know that by default it runs on port 8080 which may be a concern.
 
 To mitigate that, I'll pipe the password env variable to docker login and the password to standard input from the echo command.
 
 ![image-13](./images/image-13.png)
 
-I'll tag the image with a new version (2), test it, build and push it to DockerHub. I now have two images and the one which is secure is the second version.
+I'll tag the image with a new version (2), test it, build and push it to DockerHub. I now have two images and the one which is secure is version 2.0.
 
 ![image-14](./images/image-14.png)
 
 ## Building with Jenkins Pipeline
 
-Automating the build process with Jenkins CI/CD pipeline comes in handy as it enables us to have full control of the pipeline (Code Checkout, Test, Build, Deploy) by using scripts for a stable CI/CD. I will create a Pipeline job (my-pipeline) and use a script to automate the deployment of the docker image that we initially build. Jenkins will fetch the script from GitHub and run the Maven build using the script, deploy to my DockerHub private repository. I'll tag the image as version 3.
+Automating the build process with Jenkins CI/CD pipeline comes in handy as it enables us to have full control of the pipeline (Code Checkout, Test, Build, Deploy) by using scripts for a stable CI/CD. I will create a Pipeline job (my-pipeline) and use a script to automate the deployment of the docker image that I initially build. Jenkins will fetch the script from GitHub and run the Maven build using the script and deploy to my DockerHub private repository. I'll tag the image as version 3.
 
 ```groovy
 pipeline {
@@ -2781,7 +2780,9 @@ Finished: SUCCESS
 
 ## Preparing Docker-compose Manifest File
 
-The reason as to why I went through the process of automating the deployment of a docker build in a private docker registry is because I wanted to automate the creation of a docker-compose file in an AWS EC2 instance, then use Ansible to automate the copying of the image from DockerHub private registry via a YAML manifest file then after a successful authentication, copy the image to an AWS EC2 instance and then run it.
+The reason as to why I went through the process of automating the deployment of a docker build in a private docker registry is because I wanted to demonstrate how we can automate the creation of Docker images in a private Docker repo with Jenkins. It's possible to use other tools like Ansible to orchestrate the deployment of resources from Jenkins to a cloud provider.
+
+Next I'll create a Docker compose file and copy the image I deployed from my Docker private repository to an EC2 instance on AWS, then do something fun like running a backend database like **mysql** and a frontend UI of **phpmyadmin**.
 
 I have prepared the docker-compose file locally, which is under the *docker-compose-manifest* folder.
 
@@ -2824,7 +2825,7 @@ volumes:
     driver: local
 ```
 
-The docker-compose YAML file will not run independently but will be fetched via a url by Ansible playbook file as shown below (I'm running Ansible and Terraform separately, but I'll amalgamate Ansible with terraform using **local-config** later on to run the two together).
+The docker-compose YAML file will not run independently but will be fetched via a url by Ansible playbook file as shown below (I'm running Ansible and Terraform separately, but I'll amalgamate Ansible with terraform using **local-config** later on in order to run the two together).
 
 ## Preparing Ansible Manifest File
 
